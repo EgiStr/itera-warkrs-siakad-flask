@@ -338,8 +338,9 @@ def load_course_list():
         return load_course_list_from_md()
     
 def migrate_courses_from_md():
-    """Migrate courses from COURSE_LIST.md to database, with support for faculty/department and auto semester."""
+    """Migrate courses from GitHub COURSE_LIST.md URL to database, with support for faculty/department and auto semester."""
     try:
+        import requests
 
         def get_current_semester():
             now = datetime.now()
@@ -359,8 +360,13 @@ def migrate_courses_from_md():
             else:
                 return f"{year-1}/{year}-2"
 
-        with open('COURSE_LIST.md', 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Load course data from GitHub URL
+        course_url = "https://raw.githubusercontent.com/EgiStr/itera-warkrs-siakad-flask/refs/heads/main/COURSE_LIST.md"
+        print(f"📚 Loading course data from GitHub: {course_url}")
+        
+        response = requests.get(course_url, timeout=30)
+        response.raise_for_status()
+        content = response.text
             
         lines = content.split('\n')
         in_table = False
@@ -468,63 +474,85 @@ def migrate_courses_from_md():
         else:
             print("⚠️  No courses found in COURSE_LIST.md to migrate")
             
+    except requests.RequestException as e:
+        print(f"⚠️  Failed to load course data from GitHub: {e}")
+        print("⚠️  Using fallback courses due to network error")
     except FileNotFoundError:
         print("⚠️  COURSE_LIST.md not found for migration")
     except Exception as e:
-        print(f"⚠️  Error migrating courses from COURSE_LIST.md: {e}")
+        print(f"⚠️  Error migrating courses from GitHub: {e}")
         db.session.rollback()
 
 def load_course_list_from_md():
-    """Fallback function to load courses from COURSE_LIST.md (original implementation)"""
+    """Fallback function to load courses from GitHub COURSE_LIST.md URL"""
     try:
-        with open('COURSE_LIST.md', 'r', encoding='utf-8') as f:
-            content = f.read()
-            courses = []
+        import requests
+        
+        # Load course data from GitHub URL
+        course_url = "https://raw.githubusercontent.com/EgiStr/itera-warkrs-siakad-flask/refs/heads/main/COURSE_LIST.md"
+        print(f"📚 Loading course data from GitHub: {course_url}")
+        
+        response = requests.get(course_url, timeout=30)
+        response.raise_for_status()
+        content = response.text
+        
+        courses = []
+        
+        # Parse markdown table format
+        lines = content.split('\n')
+        in_table = False
+        
+        for line in lines:
+            line = line.strip()
             
-            # Parse markdown table format
-            lines = content.split('\n')
-            in_table = False
+            # Skip empty lines and headers
+            if not line or line.startswith('#') or line.startswith('-') or line.startswith('**'):
+                continue
             
-            for line in lines:
-                line = line.strip()
+            # Detect table start (header row)
+            if 'Kode Mata Kuliah' in line and 'Nama Mata Kuliah' in line:
+                in_table = True
+                continue
+            
+            # Skip table separator row
+            if in_table and line.startswith('|--'):
+                continue
+            
+            # Parse table rows
+            if in_table and line.startswith('|') and line.endswith('|'):
+                parts = [part.strip() for part in line.split('|')]
                 
-                # Skip empty lines and headers
-                if not line or line.startswith('#') or line.startswith('-') or line.startswith('**'):
-                    continue
-                
-                # Detect table start (header row)
-                if 'Kode Mata Kuliah' in line and 'Nama Mata Kuliah' in line:
-                    in_table = True
-                    continue
-                
-                # Skip table separator row
-                if in_table and line.startswith('|--'):
-                    continue
-                
-                # Parse table rows
-                if in_table and line.startswith('|') and line.endswith('|'):
-                    parts = [part.strip() for part in line.split('|')]
+                # Table format: | Kode | Nama | Kelas | Class ID |
+                if len(parts) >= 5:  # Including empty first and last parts from split
+                    kode = parts[1].strip()
+                    nama = parts[2].strip()
+                    kelas = parts[3].strip()
+                    class_id = parts[4].strip()
                     
-                    # Table format: | Kode | Nama | Kelas | Class ID |
-                    if len(parts) >= 5:  # Including empty first and last parts from split
-                        kode = parts[1].strip()
-                        nama = parts[2].strip()
-                        kelas = parts[3].strip()
-                        class_id = parts[4].strip()
-                        
-                        if kode and nama and kelas and class_id:
-                            # Create course identifier with class
-                            course_label = f"{kode} ({kelas}) - {nama}"
-                            courses.append((class_id, course_label))
-                
-                # Stop parsing if we hit end of table section
-                if in_table and line.startswith('---'):
-                    break
+                    if kode and nama and kelas and class_id:
+                        # Create course identifier with class
+                        course_label = f"{kode} ({kelas}) - {nama}"
+                        courses.append((class_id, course_label))
             
-            # Sort courses by name for better UX
-            courses.sort(key=lambda x: x[1])
-            return courses
-            
+            # Stop parsing if we hit end of table section
+            if in_table and line.startswith('---'):
+                break
+        
+        # Sort courses by name for better UX
+        courses.sort(key=lambda x: x[1])
+        return courses
+        
+    except requests.RequestException as e:
+        print(f"⚠️  Failed to load course data from GitHub: {e}")
+        print("⚠️  Using fallback courses due to network error")
+        # Fallback to some default courses
+        return [
+            ('37053', 'AR25-11001 (RA) - Studio Dasar 1'),
+            ('37055', 'AR25-11001 (RB) - Studio Dasar 1'),
+            ('37056', 'AR25-11001 (RC) - Studio Dasar 1'),
+            ('35998', 'IF25-40033 - Algoritma dan Pemrograman'),
+            ('36847', 'TK25-40001 - Teknik Kimia Dasar')
+        ]
     except FileNotFoundError:
         print("⚠️  COURSE_LIST.md not found, using fallback courses")
         # Fallback to some default courses
@@ -536,9 +564,9 @@ def load_course_list_from_md():
             ('36847', 'TK25-40001 - Teknik Kimia Dasar')
         ]
     except Exception as e:
-        print(f"⚠️  Error parsing COURSE_LIST.md: {e}")
+        print(f"⚠️  Error parsing course data from GitHub: {e}")
         return [
-            ('fallback1', 'Error loading courses - please check COURSE_LIST.md'),
+            ('fallback1', 'Error loading courses - please check network connection'),
             ('fallback2', 'Using fallback course list')
         ]
 
@@ -1476,10 +1504,10 @@ def init_db():
     """Initialize database tables"""
     db.create_all()
     
-    # Try to migrate courses from COURSE_LIST.md if database is empty
+    # Try to migrate courses from GitHub if database is empty
     try:
         if Course.query.count() == 0:
-            print("📚 No courses found in database, attempting migration from COURSE_LIST.md...")
+            print("📚 No courses found in database, attempting migration from GitHub...")
             migrate_courses_from_md()
     except Exception as e:
         print(f"⚠️  Error during course migration: {e}")

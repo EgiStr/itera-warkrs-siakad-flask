@@ -11,13 +11,25 @@ class Config:
     
     # Database configuration
     BASE_DIR = Path(__file__).parent
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f'sqlite:///{BASE_DIR}/warkrs.db'
+    database_url = os.environ.get('DATABASE_URL') or f'sqlite:///{BASE_DIR}/warkrs.db'
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_timeout': 20,
-        'pool_recycle': -1,
-        'pool_pre_ping': True
-    }
+    
+    # Engine options based on database type
+    if database_url and database_url.startswith('postgresql://'):
+        # PostgreSQL-specific options
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_timeout': 20,
+            'pool_recycle': -1,
+            'pool_pre_ping': True,
+            'pool_size': 5,
+            'max_overflow': 10
+        }
+    else:
+        # SQLite-specific options (no pool options)
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_pre_ping': True
+        }
     
     # Flask-Login configuration
     REMEMBER_COOKIE_DURATION = 86400  # 24 hours
@@ -70,7 +82,24 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     """Testing configuration"""
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    # Use PostgreSQL if available, otherwise fall back to in-memory SQLite
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url and database_url.startswith('postgresql://'):
+        SQLALCHEMY_DATABASE_URI = database_url
+        # PostgreSQL-specific options for testing
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_timeout': 20,
+            'pool_recycle': -1,
+            'pool_pre_ping': True,
+            'pool_size': 2,  # Smaller pool for testing
+            'max_overflow': 5
+        }
+    else:
+        SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+        # SQLite-specific options
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_pre_ping': True
+        }
     WTF_CSRF_ENABLED = False
 
 # Configuration mapping
