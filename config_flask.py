@@ -52,8 +52,14 @@ class ProductionConfig(Config):
     SESSION_COOKIE_SAMESITE = 'Lax'
     
     # Vercel-specific configuration
-    # Database will be in /tmp (not persistent, consider external DB for production)
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:////tmp/warkrs.db'
+    # For serverless functions, we'll use SQLite in /tmp
+    # Override DATABASE_URL if it's PostgreSQL and we're on Vercel
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:////tmp/warkrs.db')
+    if database_url and database_url.startswith('postgres://'):
+        # Force SQLite for Vercel serverless functions
+        SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/warkrs.db'
+    else:
+        SQLALCHEMY_DATABASE_URI = database_url
     
     # Force HTTPS in production
     PREFERRED_URL_SCHEME = 'https'

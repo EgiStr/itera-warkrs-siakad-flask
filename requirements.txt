@@ -7,9 +7,6 @@ Flask-SQLAlchemy==3.0.5
 WTForms==3.0.1
 Werkzeug==2.2.3
 
-# Database drivers
-psycopg2-binary==2.9.7
-
 # Security and Encryption
 cryptography==41.0.7
 
