@@ -11,11 +11,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/war/cron",
-      "schedule": "*/5 8-17 * * 1-5"
-    }
   ]
 }
