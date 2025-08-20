@@ -23,6 +23,7 @@ python-telegram-bot==21.3
 
 # Additional utilities
 python-dotenv==1.0.1
+schedule==1.2.0
 certifi==2025.8.3
 charset-normalizer==3.4.3
 idna==3.10

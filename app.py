@@ -1639,6 +1639,14 @@ def init_db():
     
     print("✅ Database initialized successfully")
 
+# Register API blueprints
+try:
+    from war_api import war_api
+    app.register_blueprint(war_api)
+    print("✅ WAR API blueprint registered")
+except ImportError as e:
+    print(f"⚠️ Could not register WAR API blueprint: {e}")
+
 if __name__ == '__main__':
     print("⚠️  Please use run_web.py to start the application")
     print("   python run_web.py")

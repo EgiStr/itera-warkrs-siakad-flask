@@ -1,16 +1,186 @@
 """
 Vercel-compatible WAR KRS implementation without background threads
+Enhanced with multiple background processing modes
 """
 
 import json
 import time
+import threading
+import schedule
 from datetime import datetime
 from flask import jsonify
 
-def run_war_process_serverless(user_id, session_id, app, db):
+def run_war_process_serverless(user_id, session_id, app, db, mode="single", interval_minutes=5):
     """
-    Serverless-compatible WAR KRS process that runs synchronously
-    This version doesn't use background threads which don't work well in Vercel
+    Serverless-compatible WAR KRS process with background capabilities
+    
+    Args:
+        user_id: User ID
+        session_id: WAR session ID
+        app: Flask app instance
+        db: Database instance
+        mode: Processing mode - "single", "background", "webhook"
+        interval_minutes: Interval for background mode
+    """
+    
+    if mode == "background":
+        return run_war_background_mode(user_id, session_id, app, db, interval_minutes)
+    elif mode == "webhook":
+        return run_war_webhook_mode(user_id, session_id, app, db)
+    else:
+        return run_war_single_mode(user_id, session_id, app, db)
+
+def run_war_background_mode(user_id, session_id, app, db, interval_minutes=5):
+    """
+    Run WAR in background mode using threading and scheduling
+    """
+    
+    with app.app_context():
+        try:
+            from app import User, WarSession, log_activity
+            
+            # Get user and session
+            user = User.query.get(user_id)
+            war_session = WarSession.query.get(session_id)
+            
+            if not user or not war_session:
+                return {"error": "User or session not found"}
+            
+            # Update session to scheduled
+            war_session.status = 'active'
+            war_session.started_at = datetime.utcnow()
+            war_session.last_activity = datetime.utcnow()
+            db.session.commit()
+            
+            log_activity(user_id, f"WAR background mode started (interval: {interval_minutes}min)", "INFO", session_id)
+            
+            # Background worker function
+            def background_worker():
+                attempt_count = 0
+                max_attempts = 120  # 10 hours at 5-minute intervals
+                
+                while attempt_count < max_attempts:
+                    try:
+                        with app.app_context():
+                            # Check if session should continue
+                            session = WarSession.query.get(session_id)
+                            if not session or session.status not in ['active']:
+                                log_activity(user_id, "Background WAR stopped - session inactive", "INFO", session_id)
+                                break
+                            
+                            # Run single WAR attempt
+                            result = run_war_single_mode(user_id, session_id, app, db)
+                            
+                            # Update session
+                            session.last_activity = datetime.utcnow()
+                            session.total_attempts = (session.total_attempts or 0) + 1
+                            
+                            # Check if successful
+                            if result.get('successful_courses'):
+                                session.status = 'completed'
+                                session.stopped_at = datetime.utcnow()
+                                session.successful_attempts = (session.successful_attempts or 0) + 1
+                                session.courses_obtained = json.dumps(result['successful_courses'])
+                                db.session.commit()
+                                
+                                log_activity(user_id, f"Background WAR completed successfully after {attempt_count + 1} attempts", "SUCCESS", session_id)
+                                break
+                            
+                            db.session.commit()
+                            attempt_count += 1
+                            
+                            # Wait before next attempt (outside app context)
+                        
+                        time.sleep(interval_minutes * 60)  # Convert to seconds
+                        
+                    except Exception as e:
+                        with app.app_context():
+                            log_activity(user_id, f"Background WAR attempt {attempt_count + 1} error: {e}", "ERROR", session_id)
+                        attempt_count += 1
+                        time.sleep(interval_minutes * 60)
+                
+                # Mark as completed if max attempts reached
+                try:
+                    with app.app_context():
+                        session = WarSession.query.get(session_id)
+                        if session and session.status == 'active':
+                            session.status = 'completed'
+                            session.stopped_at = datetime.utcnow()
+                            db.session.commit()
+                            log_activity(user_id, f"Background WAR stopped - max attempts ({max_attempts}) reached", "INFO", session_id)
+                except:
+                    pass
+            
+            # Start background thread
+            worker_thread = threading.Thread(target=background_worker, daemon=True)
+            worker_thread.start()
+            
+            return {
+                "success": True,
+                "message": f"Background WAR started - will run every {interval_minutes} minutes",
+                "mode": "background",
+                "session_id": session_id
+            }
+            
+        except Exception as e:
+            log_activity(user_id, f"Background WAR setup error: {e}", "ERROR", session_id)
+            return {"error": str(e)}
+
+def run_war_webhook_mode(user_id, session_id, app, db):
+    """
+    Run WAR for webhook/cron calls - single attempt per call
+    """
+    
+    with app.app_context():
+        try:
+            from app import WarSession, log_activity
+            
+            # Get session
+            war_session = WarSession.query.get(session_id)
+            if not war_session:
+                return {"error": "Session not found"}
+            
+            # Check if session should continue
+            if war_session.status not in ['active', 'scheduled']:
+                return {
+                    "message": f"Session not active (status: {war_session.status})",
+                    "status": war_session.status,
+                    "continue": False
+                }
+            
+            # Update last activity
+            war_session.last_activity = datetime.utcnow()
+            war_session.total_attempts = (war_session.total_attempts or 0) + 1
+            db.session.commit()
+            
+            log_activity(user_id, f"Webhook WAR attempt #{war_session.total_attempts}", "INFO", session_id)
+            
+            # Run single attempt
+            result = run_war_single_mode(user_id, session_id, app, db)
+            
+            # Check if successful
+            if result.get('successful_courses'):
+                war_session.status = 'completed'
+                war_session.stopped_at = datetime.utcnow()
+                war_session.successful_attempts = (war_session.successful_attempts or 0) + 1
+                war_session.courses_obtained = json.dumps(result['successful_courses'])
+                db.session.commit()
+                
+                result['continue'] = False  # Stop webhook calls
+                result['webhook_message'] = 'WAR completed successfully'
+            else:
+                result['continue'] = True  # Continue webhook calls
+                result['webhook_message'] = 'WAR attempt completed, will retry'
+            
+            return result
+            
+        except Exception as e:
+            log_activity(user_id, f"Webhook WAR error: {e}", "ERROR", session_id)
+            return {"error": str(e), "continue": False}
+
+def run_war_single_mode(user_id, session_id, app, db):
+    """
+    Original single-attempt WAR mode
     """
     
     with app.app_context():
@@ -50,48 +220,23 @@ def run_war_process_serverless(user_id, session_id, app, db):
                         bot_token=settings.telegram_bot_token,
                         chat_id=settings.telegram_chat_id
                     )
-                    if notifier.is_enabled():
-                        log_activity(user_id, "Telegram notifications enabled for serverless WAR", "INFO", session_id)
-                    else:
-                        log_activity(user_id, "Telegram notifier created but not enabled", "WARNING", session_id)
+                    if not notifier.is_enabled():
                         notifier = None
                 except Exception as e:
-                    log_activity(user_id, f"Failed to initialize Telegram: {e}", "WARNING", session_id)
+                    log_activity(user_id, f"Telegram setup error: {e}", "WARNING", session_id)
                     notifier = None
-            else:
-                log_activity(user_id, "Telegram not configured (missing bot_token or chat_id)", "INFO", session_id)
             
             # Update session status
             war_session = WarSession.query.get(session_id)
-            if war_session:
+            if war_session and war_session.status == 'pending':
                 war_session.status = 'active'
                 war_session.started_at = datetime.utcnow()
                 war_session.last_activity = datetime.utcnow()
                 db.session.commit()
             
-            log_activity(user_id, f"WAR KRS process started for {len(target_courses_list)} courses", "INFO", session_id)
+            log_activity(user_id, f"WAR KRS single attempt for {len(target_courses_list)} courses", "INFO", session_id)
             
-            # Send start notification
-            if notifier and notifier.is_enabled():
-                course_names = []
-                available_courses = load_course_list()
-                course_id_to_info = {class_id: label for class_id, label in available_courses}
-                
-                for class_id in target_courses_list:
-                    if class_id in course_id_to_info:
-                        course_names.append(course_id_to_info[class_id])
-                    else:
-                        course_names.append(class_id)
-                
-                try:
-                    if notifier.notify_start(course_names):
-                        log_activity(user_id, "Telegram start notification sent successfully", "INFO", session_id)
-                    else:
-                        log_activity(user_id, "Failed to send Telegram start notification", "WARNING", session_id)
-                except Exception as e:
-                    log_activity(user_id, f"Error sending Telegram start notification: {e}", "ERROR", session_id)
-            
-            # Perform a single attempt (since we can't run continuously in serverless)
+            # Perform a single attempt
             try:
                 # Try to use existing controller
                 from config.settings import Config
@@ -144,7 +289,7 @@ def run_war_process_serverless(user_id, session_id, app, db):
                 if failed_courses:
                     log_activity(user_id, f"Failed to register: {', '.join(failed_courses)}", "WARNING", session_id)
                 
-                # Send completion notification
+                # Send completion notification for single mode only
                 if notifier and notifier.is_enabled():
                     try:
                         if successful_courses:
@@ -152,17 +297,15 @@ def run_war_process_serverless(user_id, session_id, app, db):
                                 log_activity(user_id, "Telegram completion notification sent", "INFO", session_id)
                             else:
                                 log_activity(user_id, "Failed to send Telegram completion notification", "WARNING", session_id)
-                        else:
-                            if notifier.notify_error("Serverless WAR process completed without obtaining any courses"):
-                                log_activity(user_id, "Telegram error notification sent", "INFO", session_id)
-                            else:
-                                log_activity(user_id, "Failed to send Telegram error notification", "WARNING", session_id)
                     except Exception as e:
                         log_activity(user_id, f"Error sending Telegram completion notifications: {e}", "ERROR", session_id)
                 
-                # Update session
-                if war_session:
-                    war_session.status = 'completed'
+                # Update session for single mode
+                if war_session and war_session.status == 'active':
+                    if successful_courses:
+                        war_session.status = 'completed'
+                    else:
+                        war_session.status = 'active'  # Keep active for background modes
                     war_session.last_activity = datetime.utcnow()
                     db.session.commit()
                 
