@@ -11,11 +11,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "env": {
-    "FLASK_CONFIG": "production",
-    "FLASK_SECRET_KEY": "@flask_secret_key",
-    "DATABASE_URL": "@database_url",
-    "ENCRYPTION_KEY": "@encryption_key"
-  }
+  ]
 }
