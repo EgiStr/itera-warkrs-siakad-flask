@@ -1137,20 +1137,41 @@ def start_war():
     # Log start attempt
     log_activity(current_user.id, "User initiated WAR KRS process from dashboard", "INFO", war_session.id)
     
-    # Start background thread
-    thread = threading.Thread(target=run_war_process, args=(current_user.id, war_session.id))
-    thread.daemon = True
-    thread.start()
+    # Check if running on Vercel (serverless environment)
+    is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('FLASK_CONFIG') == 'production'
     
-    # Give thread a moment to start and check if it's actually running
-    time.sleep(2)
-    
-    if current_user.id in active_sessions:
-        flash('WAR KRS process berhasil dimulai!', 'success')
-        log_activity(current_user.id, "WAR KRS background thread confirmed active", "SUCCESS", war_session.id)
+    if is_vercel:
+        # Use serverless-compatible approach
+        try:
+            from vercel_war import run_war_process_serverless
+            result = run_war_process_serverless(current_user.id, war_session.id, app, db)
+            
+            if 'error' in result:
+                flash(f'WAR process gagal: {result["error"]}', 'error')
+                log_activity(current_user.id, f"WAR process failed: {result['error']}", "ERROR", war_session.id)
+            else:
+                flash(f'WAR process selesai: {result["message"]}', 'success')
+                log_activity(current_user.id, f"WAR process completed: {result['message']}", "SUCCESS", war_session.id)
+                
+        except Exception as e:
+            flash(f'WAR process error: {str(e)}', 'error')
+            log_activity(current_user.id, f"WAR process exception: {str(e)}", "ERROR", war_session.id)
     else:
-        flash('Gagal memulai WAR process. Periksa logs untuk detail.', 'error')
-        log_activity(current_user.id, "WAR KRS background thread failed to become active", "ERROR", war_session.id)
+        # Use traditional background thread approach for local development
+        # Start background thread
+        thread = threading.Thread(target=run_war_process, args=(current_user.id, war_session.id))
+        thread.daemon = True
+        thread.start()
+        
+        # Give thread a moment to start and check if it's actually running
+        time.sleep(2)
+        
+        if current_user.id in active_sessions:
+            flash('WAR KRS process berhasil dimulai!', 'success')
+            log_activity(current_user.id, "WAR KRS background thread confirmed active", "SUCCESS", war_session.id)
+        else:
+            flash('Gagal memulai WAR process. Periksa logs untuk detail.', 'error')
+            log_activity(current_user.id, "WAR KRS background thread failed to become active", "ERROR", war_session.id)
     
     return redirect(url_for('dashboard'))
 
@@ -1166,6 +1187,61 @@ def stop_war():
         flash('Tidak ada WAR process yang sedang berjalan.', 'warning')
     
     return redirect(url_for('dashboard'))
+
+# API endpoints for Vercel compatibility
+@app.route('/api/war/start', methods=['POST'])
+@login_required
+def api_start_war():
+    """API endpoint to start WAR process (Vercel-compatible)"""
+    try:
+        # Check if already running
+        if current_user.id in active_sessions:
+            return jsonify({"error": "WAR process already running"}), 400
+        
+        # Check settings
+        if not current_user.settings or not current_user.settings.ci_session:
+            return jsonify({"error": "SIAKAD cookies not configured"}), 400
+        
+        # Check target courses
+        if not current_user.settings.target_courses:
+            return jsonify({"error": "No target courses selected"}), 400
+        
+        # Create new WAR session
+        war_session = WarSession(user_id=current_user.id)
+        db.session.add(war_session)
+        db.session.commit()
+        
+        # Run serverless WAR process
+        from vercel_war import run_war_process_serverless
+        result = run_war_process_serverless(current_user.id, war_session.id, app, db)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/war/status')
+@login_required 
+def api_war_status():
+    """API endpoint to check WAR process status"""
+    try:
+        # Get latest session
+        latest_session = WarSession.query.filter_by(
+            user_id=current_user.id
+        ).order_by(WarSession.created_at.desc()).first()
+        
+        if latest_session:
+            return jsonify({
+                "session_id": latest_session.id,
+                "status": latest_session.status,
+                "started_at": latest_session.started_at.isoformat() if latest_session.started_at else None,
+                "last_activity": latest_session.last_activity.isoformat() if latest_session.last_activity else None
+            })
+        else:
+            return jsonify({"status": "no_session"})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/logs')
 @login_required
