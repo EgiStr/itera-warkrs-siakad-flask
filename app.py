@@ -164,13 +164,32 @@ class UserSettings(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    ci_session = db.Column(db.Text)
-    cf_clearance = db.Column(db.Text)
+    ci_session = db.Column(db.Text)  # Stored encrypted
+    cf_clearance = db.Column(db.Text)  # Stored encrypted
     telegram_bot_token = db.Column(db.Text)
     telegram_chat_id = db.Column(db.Text)
     target_courses = db.Column(db.Text)  # JSON string
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def set_ci_session(self, value):
+        """Set ci_session with encryption"""
+        self.ci_session = encrypt_cookie(value) if value else None
+    
+    def get_ci_session(self):
+        """Get decrypted ci_session"""
+        return decrypt_cookie(self.ci_session) if self.ci_session else None
+    
+    def set_cf_clearance(self, value):
+        """Set cf_clearance with encryption"""
+        self.cf_clearance = encrypt_cookie(value) if value else None
+    
+    def get_cf_clearance(self):
+        """Get decrypted cf_clearance"""
+        return decrypt_cookie(self.cf_clearance) if self.cf_clearance else None
+    
+    def __repr__(self):
+        return f"<UserSettings for user_id={self.user_id}>"
 
 class WarSession(db.Model):
     __tablename__ = 'war_sessions'
@@ -281,6 +300,26 @@ def decrypt_password(encrypted_password):
         return cipher_suite.decrypt(encrypted_password.encode()).decode()
     except:
         return None
+
+def encrypt_cookie(cookie_value):
+    """Encrypt sensitive cookie values (ci_session, cf_clearance)"""
+    if not cookie_value:
+        return None
+    try:
+        return cipher_suite.encrypt(cookie_value.encode()).decode()
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to encrypt cookie: {e}")
+        return cookie_value  # Return original if encryption fails
+
+def decrypt_cookie(encrypted_cookie):
+    """Decrypt sensitive cookie values"""
+    if not encrypted_cookie:
+        return None
+    try:
+        return cipher_suite.decrypt(encrypted_cookie.encode()).decode()
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to decrypt cookie: {e}")
+        return encrypted_cookie  # Return as-is if decryption fails (might be unencrypted)
 
 def log_activity(user_id, message, level='INFO', session_id=None):
     """Log user activity"""
@@ -582,15 +621,25 @@ def run_war_process(user_id, session_id):
             user = User.query.get(user_id)
             settings = user.settings
             
-            if not settings or not settings.ci_session or not settings.cf_clearance:
-                log_activity(user_id, "SIAKAD cookies not configured", "ERROR", session_id)
+            if not settings:
+                log_activity(user_id, "User settings not found", "ERROR", session_id)
                 return
             
-            # Setup cookies for SIAKAD session
+            # Get decrypted cookie values
+            ci_session_decrypted = settings.get_ci_session()
+            cf_clearance_decrypted = settings.get_cf_clearance()
+            
+            if not ci_session_decrypted or not cf_clearance_decrypted:
+                log_activity(user_id, "SIAKAD cookies not configured or failed to decrypt", "ERROR", session_id)
+                return
+            
+            # Setup cookies for SIAKAD session using decrypted values
             cookies = {
-                'ci_session': settings.ci_session,
-                'cf_clearance': settings.cf_clearance
+                'ci_session': ci_session_decrypted,
+                'cf_clearance': cf_clearance_decrypted
             }
+            
+            log_activity(user_id, "Successfully decrypted SIAKAD cookies for WAR process", "INFO", session_id)
             
             # Parse target courses
             target_courses_list = json.loads(settings.target_courses) if settings.target_courses else []
@@ -1085,9 +1134,9 @@ def settings():
             settings = UserSettings(user_id=current_user.id)
             db.session.add(settings)
         
-        # Update settings
-        settings.ci_session = form.ci_session.data
-        settings.cf_clearance = form.cf_clearance.data
+        # Update settings with encryption for sensitive data
+        settings.set_ci_session(form.ci_session.data)
+        settings.set_cf_clearance(form.cf_clearance.data)
         settings.telegram_bot_token = form.telegram_bot_token.data
         settings.telegram_chat_id = form.telegram_chat_id.data
         settings.target_courses = json.dumps(form.target_courses.data)
@@ -1095,14 +1144,14 @@ def settings():
         
         db.session.commit()
         
-        log_activity(current_user.id, "Settings updated successfully")
-        flash('Pengaturan berhasil disimpan!', 'success')
+        log_activity(current_user.id, "Settings updated successfully (cookies encrypted)")
+        flash('Pengaturan berhasil disimpan! Cookies telah dienkripsi untuk keamanan.', 'success')
         return redirect(url_for('settings'))
     
-    # Load current settings
+    # Load current settings with decryption for display
     if current_user.settings:
-        form.ci_session.data = current_user.settings.ci_session
-        form.cf_clearance.data = current_user.settings.cf_clearance
+        form.ci_session.data = current_user.settings.get_ci_session()
+        form.cf_clearance.data = current_user.settings.get_cf_clearance()
         form.telegram_bot_token.data = current_user.settings.telegram_bot_token
         form.telegram_chat_id.data = current_user.settings.telegram_chat_id
         if current_user.settings.target_courses:

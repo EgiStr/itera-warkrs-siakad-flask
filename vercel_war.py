@@ -28,10 +28,10 @@ def run_war_process_serverless(user_id, session_id, app, db):
                 log_activity(user_id, "SIAKAD cookies not configured", "ERROR", session_id)
                 return {"error": "SIAKAD cookies not configured"}
             
-            # Setup cookies
+            # Setup cookies - decrypt them
             cookies = {
-                'ci_session': settings.ci_session,
-                'cf_clearance': settings.cf_clearance
+                'ci_session': settings.get_ci_session(),
+                'cf_clearance': settings.get_cf_clearance()
             }
             
             # Parse target courses
