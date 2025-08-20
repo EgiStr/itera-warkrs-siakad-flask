@@ -1,0 +1,56 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.pytest_cache/
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/
+.gitignore
+.mypy_cache/
+.pytest_cache/
+
+# Local development files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database files (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation and setup files
+*.md
+WEB_SETUP.md
+setup_web.sh
+run_web.py
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log

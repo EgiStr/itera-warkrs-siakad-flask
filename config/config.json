@@ -1,0 +1,19 @@
+{
+    "cookies": {
+        "ci_session": "ENV:CI_SESSION",
+        "cf_clearance": "ENV:CF_CLEARANCE"
+    },
+    "target_courses": {
+        "SD25-41301": "37813"
+    },
+    "settings": {
+        "delay_seconds": 45,
+        "request_timeout": 20,
+        "verification_delay": 2,
+        "inter_request_delay": 2
+    },
+    "urls": {
+        "pilih_mk": "https://siakad.itera.ac.id/mahasiswa/krsbaru/pilihmk",
+        "simpan_krs": "https://siakad.itera.ac.id/mahasiswa/krsbaru/simpanKRS"
+    }
+}

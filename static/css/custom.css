@@ -1,0 +1,201 @@
+/* Custom CSS for WAR KRS Web Application */
+
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #0dcaf0;
+    --dark-color: #212529;
+    --light-color: #f8f9fa;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Status indicators */
+.status-active {
+    color: var(--success-color) !important;
+    animation: pulse 2s infinite;
+}
+
+.status-stopped {
+    color: var(--dark-color) !important;
+}
+
+.status-error {
+    color: var(--danger-color) !important;
+    animation: shake 0.5s ease-in-out;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Log styling */
+.log-info {
+    color: var(--info-color);
+}
+
+.log-success {
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+.log-warning {
+    color: var(--warning-color);
+}
+
+.log-error {
+    color: var(--danger-color);
+    font-weight: 500;
+}
+
+/* Progress bar animations */
+.progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* Form enhancements */
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Alert customizations */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Footer */
+.footer {
+    background-color: var(--light-color);
+    border-top: 1px solid #dee2e6;
+    margin-top: auto;
+}
+
+/* Responsive enhancements */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .btn-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    .navbar-brand {
+        font-size: 1.25rem;
+    }
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Badge enhancements */
+.badge {
+    font-size: 0.75em;
+    border-radius: 0.375rem;
+}
+
+/* Table responsiveness */
+.table-responsive {
+    border-radius: 0.5rem;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    background-color: var(--light-color);
+}
+
+/* Course selection */
+.form-select[multiple] {
+    min-height: 200px;
+}
+
+.form-select[multiple] option:checked {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Dashboard cards */
+.dashboard-card {
+    transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+/* Success states */
+.text-success {
+    color: var(--success-color) !important;
+}
+
+.bg-success {
+    background-color: var(--success-color) !important;
+}
+
+/* Error states */
+.text-danger {
+    color: var(--danger-color) !important;
+}
+
+.bg-danger {
+    background-color: var(--danger-color) !important;
+}

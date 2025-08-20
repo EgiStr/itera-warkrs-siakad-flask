@@ -1,0 +1,20 @@
+{
+    "cookies": {
+        "ci_session": "de8d3d93c2934f115d8b43af1bdd8e8cba291ae1",
+        "cf_clearance": "ao9o0OZEtiXuJCojU3utRRqFKiy48D0I1KAqhGiU8H8-1751610720-1.2.1.1-46pw3iSHJa1f3NjRGLnRM8FjVF4CcxMZP7NusS1UAALQpfqp9NH.I_5_ffyMOT2CFWYDhD0VbJ.JGxkTac2BockGhGW7K_fC9m3K9V3CGuI_VCqg22ouBEu6SYkqAYP5vQ4llLNoPlCN1_lHxeGCt3V4fN3DApHztWCt.eaLF4YslhjF1lgFGnjrfNXpZO4WG.r5B4COCIcCdWFzhDCXFPFdC8F1JfxweQlu3AaHH6s"
+    },
+    "target_courses": {
+        "SD25-41301": "37704",
+        "SD25-40004": "37705"
+    },
+    "settings": {
+        "delay_seconds": 45,
+        "request_timeout": 20,
+        "verification_delay": 2,
+        "inter_request_delay": 2
+    },
+    "urls": {
+        "pilih_mk": "https://siakad.itera.ac.id/mahasiswa/krsbaru/pilihmk",
+        "simpan_krs": "https://siakad.itera.ac.id/mahasiswa/krsbaru/simpanKRS"
+    }
+}
