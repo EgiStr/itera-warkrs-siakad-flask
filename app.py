@@ -90,10 +90,6 @@ except ImportError as e:
         def send_message(self, *args, **kwargs):
             pass
             return False, {}, [], []
-    
-    class TelegramNotifier:
-        def __init__(self, *args, **kwargs):
-            pass
 
 # Initialize Flask app
 app = Flask(__name__)
