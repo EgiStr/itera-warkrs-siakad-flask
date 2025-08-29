@@ -1201,26 +1201,7 @@ def start_war():
     # Log start attempt
     log_activity(current_user.id, "User initiated WAR KRS process from dashboard", "INFO", war_session.id)
     
-    # Check if running on Vercel (serverless environment)
-    is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('FLASK_CONFIG') == 'production'
-    
-    if is_vercel:
-        # Use serverless-compatible approach
-        try:
-            from vercel_war import run_war_process_serverless
-            result = run_war_process_serverless(current_user.id, war_session.id, app, db)
-            
-            if 'error' in result:
-                flash(f'WAR process gagal: {result["error"]}', 'error')
-                log_activity(current_user.id, f"WAR process failed: {result['error']}", "ERROR", war_session.id)
-            else:
-                flash(f'WAR process selesai: {result["message"]}', 'success')
-                log_activity(current_user.id, f"WAR process completed: {result['message']}", "SUCCESS", war_session.id)
-                
-        except Exception as e:
-            flash(f'WAR process error: {str(e)}', 'error')
-            log_activity(current_user.id, f"WAR process exception: {str(e)}", "ERROR", war_session.id)
-    elif CELERY_AVAILABLE:
+    if CELERY_AVAILABLE:
         # Use Celery for background processing (RECOMMENDED for production)
         try:
             # Get user settings and prepare task parameters
