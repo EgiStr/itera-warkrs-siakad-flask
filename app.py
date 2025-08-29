@@ -1683,13 +1683,20 @@ def api_faculties():
 def test_telegram():
     """Test Telegram notification"""
     try:
+        # Debug: Log current user info
+        app.logger.info(f"test_telegram: Current user: {current_user.id if current_user.is_authenticated else 'Not authenticated'}")
+        
         # Get user settings - ensure settings exist
         settings = current_user.settings
+        app.logger.info(f"test_telegram: Settings object: {settings}")
+        
         if not settings:
             # Create default settings if they don't exist
+            app.logger.info("test_telegram: Creating new settings")
             settings = UserSettings(user_id=current_user.id)
             db.session.add(settings)
             db.session.commit()
+            app.logger.info("test_telegram: Settings created successfully")
         
         if not settings.telegram_bot_token or not settings.telegram_chat_id:
             return jsonify({
@@ -1784,6 +1791,9 @@ This is a test message from WAR KRS automation system.
                 }), 500
         
     except Exception as e:
+        app.logger.error(f"test_telegram: Unexpected error: {str(e)}")
+        import traceback
+        app.logger.error(f"test_telegram: Traceback: {traceback.format_exc()}")
         return jsonify({
             'status': 'error',
             'message': f'Unexpected error: {str(e)}'
