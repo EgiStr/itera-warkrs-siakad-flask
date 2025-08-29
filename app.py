@@ -44,6 +44,17 @@ except ImportError as e:
     print(f"⚠️  Warning: Could not import existing business logic: {e}")
     print("    Using fallback WAR implementation.")
     CONTROLLER_AVAILABLE = False
+
+# Import Celery for background tasks (with error handling)
+try:
+    from celery_app import celery_app
+    from tasks.war_tasks import run_war_task, stop_war_task
+    CELERY_AVAILABLE = True
+    print("✅ Celery task system imported successfully")
+except ImportError as e:
+    print(f"⚠️  Warning: Could not import Celery: {e}")
+    print("    Falling back to threading approach.")
+    CELERY_AVAILABLE = False
     
     # Create dummy classes to prevent crashes
     class WARKRSController:
@@ -142,6 +153,7 @@ cipher_suite = Fernet(ENCRYPTION_KEY)
 
 # Global variable to track active WAR sessions
 active_sessions = {}
+celery_tasks = {}  # Track Celery task IDs for users
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -1205,6 +1217,94 @@ def start_war():
         except Exception as e:
             flash(f'WAR process error: {str(e)}', 'error')
             log_activity(current_user.id, f"WAR process exception: {str(e)}", "ERROR", war_session.id)
+    elif CELERY_AVAILABLE:
+        # Use Celery for background processing (RECOMMENDED for production)
+        try:
+            # Get user settings and prepare task parameters
+            settings = current_user.settings
+            
+            if not settings:
+                flash('User settings not found', 'error')
+                return redirect(url_for('settings'))
+            
+            # Get decrypted cookies
+            cookies = {
+                'ci_session': settings.get_ci_session(),
+                'cf_clearance': settings.get_cf_clearance()
+            }
+            
+            if not cookies['ci_session'] or not cookies['cf_clearance']:
+                flash('SIAKAD cookies tidak valid atau gagal didekripsi', 'error')
+                return redirect(url_for('settings'))
+            
+            # Get configuration
+            from config.settings import Config
+            config = Config()
+            default_settings = config.get_all()
+            urls = default_settings.get('siakad_urls', {})
+            
+            # Parse target courses
+            target_courses_list = json.loads(settings.target_courses) if settings.target_courses else []
+            
+            if not target_courses_list:
+                flash('No target courses selected', 'error')
+                return redirect(url_for('settings'))
+            
+            # Convert target courses to expected format
+            available_courses = load_course_list()
+            course_id_to_info = {class_id: label for class_id, label in available_courses}
+            
+            target_courses_dict = {}
+            for class_id in target_courses_list:
+                if class_id in course_id_to_info:
+                    course_info = course_id_to_info[class_id]
+                    course_code = course_info.split(' ')[0]  # Get course code
+                    target_courses_dict[course_code] = class_id
+                else:
+                    target_courses_dict[class_id] = class_id
+            
+            # Setup Telegram configuration
+            telegram_config = None
+            if settings.telegram_bot_token and settings.telegram_chat_id:
+                telegram_config = {
+                    'bot_token': settings.telegram_bot_token,
+                    'chat_id': settings.telegram_chat_id
+                }
+            
+            # Submit task to Celery
+            task = run_war_task.delay(
+                user_id=current_user.id,
+                session_id=war_session.id,
+                cookies=cookies,
+                urls=urls,
+                target_courses=target_courses_dict,
+                settings=default_settings,
+                telegram_config=telegram_config
+            )
+            
+            # Track task
+            celery_tasks[current_user.id] = {
+                'task_id': task.id,
+                'session_id': war_session.id,
+                'started_at': datetime.utcnow(),
+                'status': 'queued'
+            }
+            
+            # Update session status  
+            active_sessions[current_user.id] = {
+                'session_id': war_session.id,
+                'status': 'active',
+                'started_at': datetime.utcnow(),
+                'stop_requested': False,
+                'task_id': task.id
+            }
+            
+            flash(f'WAR KRS process berhasil dimulai dengan Celery! Task ID: {task.id[:8]}...', 'success')
+            log_activity(current_user.id, f"Celery WAR task started with ID {task.id}", "SUCCESS", war_session.id)
+            
+        except Exception as e:
+            flash(f'Gagal memulai WAR process dengan Celery: {str(e)}', 'error')
+            log_activity(current_user.id, f"Celery WAR task failed: {str(e)}", "ERROR", war_session.id)
     else:
         # Use traditional background thread approach for local development
         # Start background thread
@@ -1216,7 +1316,7 @@ def start_war():
         time.sleep(2)
         
         if current_user.id in active_sessions:
-            flash('WAR KRS process berhasil dimulai!', 'success')
+            flash('WAR KRS process berhasil dimulai dengan threading!', 'success')
             log_activity(current_user.id, "WAR KRS background thread confirmed active", "SUCCESS", war_session.id)
         else:
             flash('Gagal memulai WAR process. Periksa logs untuk detail.', 'error')
@@ -1228,10 +1328,37 @@ def start_war():
 @login_required
 def stop_war():
     """Stop WAR process"""
-    if current_user.id in active_sessions:
+    
+    if CELERY_AVAILABLE and current_user.id in celery_tasks:
+        # Stop Celery task
+        try:
+            task_info = celery_tasks[current_user.id]
+            task_id = task_info['task_id']
+            
+            # Revoke the task
+            celery_app.control.revoke(task_id, terminate=True)
+            
+            # Send stop signal via Celery task
+            stop_task = stop_war_task.delay(current_user.id)
+            
+            # Clean up tracking
+            del celery_tasks[current_user.id]
+            if current_user.id in active_sessions:
+                del active_sessions[current_user.id]
+                
+            flash(f'WAR process berhasil dihentikan! Stop task ID: {stop_task.id[:8]}...', 'success')
+            log_activity(current_user.id, f"Celery WAR task stopped: {task_id}", "INFO")
+            
+        except Exception as e:
+            flash(f'Error menghentikan Celery task: {str(e)}', 'error')
+            log_activity(current_user.id, f"Error stopping Celery task: {str(e)}", "ERROR")
+            
+    elif current_user.id in active_sessions:
+        # Stop threading-based task
         active_sessions[current_user.id]['stop_requested'] = True
         active_sessions[current_user.id]['status'] = 'stopping'
         flash('WAR process sedang dihentikan...', 'info')
+        log_activity(current_user.id, "Threading WAR process stop requested", "INFO")
     else:
         flash('Tidak ada WAR process yang sedang berjalan.', 'warning')
     
@@ -1309,6 +1436,54 @@ def logs():
 @login_required
 def api_status():
     """API endpoint for real-time status updates"""
+    
+    # Check Celery task status if available
+    if CELERY_AVAILABLE and current_user.id in celery_tasks:
+        try:
+            task_info = celery_tasks[current_user.id]
+            task_id = task_info['task_id']
+            
+            # Get task result from Celery
+            task = celery_app.AsyncResult(task_id)
+            
+            if task.state == 'PENDING':
+                celery_status = 'queued'
+                celery_info = {'message': 'Task is waiting to be processed'}
+            elif task.state == 'PROGRESS':
+                celery_status = 'active'
+                celery_info = task.info or {}
+            elif task.state == 'SUCCESS':
+                celery_status = 'completed'
+                celery_info = task.result or {}
+            elif task.state == 'FAILURE':
+                celery_status = 'error'
+                celery_info = {'error': str(task.info)}
+            else:
+                celery_status = task.state.lower()
+                celery_info = task.info or {}
+                
+            # Enhanced response with Celery information
+            response = {
+                'status': celery_status,
+                'task_type': 'celery',
+                'task_id': task_id,
+                'session_active': celery_status in ['queued', 'active'],
+                'celery_info': celery_info,
+                'started_at': task_info.get('started_at').isoformat() if task_info.get('started_at') else None,
+                'total_attempts': celery_info.get('cycle', 0),
+                'successful_attempts': len(celery_info.get('successful_courses', [])),
+                'obtained_courses': celery_info.get('successful_courses', []),
+                'remaining_targets': celery_info.get('remaining_targets', []),
+                'last_activity': celery_info.get('last_activity', '')
+            }
+            
+            return jsonify(response)
+            
+        except Exception as e:
+            # Fallback to database if Celery check fails
+            pass
+    
+    # Fallback to existing logic
     session_status = active_sessions.get(current_user.id, {'status': 'stopped'})
     
     # Get current session from database
@@ -1319,6 +1494,7 @@ def api_status():
     
     response = {
         'status': session_status.get('status', 'stopped'),
+        'task_type': 'threading',
         'session_active': current_session is not None,
         'total_attempts': current_session.total_attempts if current_session else 0,
         'successful_attempts': current_session.successful_attempts if current_session else 0,
