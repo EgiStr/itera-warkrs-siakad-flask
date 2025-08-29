@@ -1683,10 +1683,22 @@ def api_faculties():
 def test_telegram():
     """Test Telegram notification"""
     try:
-        # Get user settings
+        # Get user settings - ensure settings exist
         settings = current_user.settings
+        if not settings:
+            # Create default settings if they don't exist
+            settings = UserSettings(
+                user_id=current_user.id,
+                cycle_delay=5,
+                request_timeout=20,
+                max_retries=3,
+                telegram_bot_token='',
+                telegram_chat_id=''
+            )
+            db.session.add(settings)
+            db.session.commit()
         
-        if not settings or not settings.telegram_bot_token or not settings.telegram_chat_id:
+        if not settings.telegram_bot_token or not settings.telegram_chat_id:
             return jsonify({
                 'status': 'error',
                 'message': 'Telegram credentials not configured. Please set Bot Token and Chat ID in settings.'
