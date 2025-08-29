@@ -1687,14 +1687,7 @@ def test_telegram():
         settings = current_user.settings
         if not settings:
             # Create default settings if they don't exist
-            settings = UserSettings(
-                user_id=current_user.id,
-                cycle_delay=5,
-                request_timeout=20,
-                max_retries=3,
-                telegram_bot_token='',
-                telegram_chat_id=''
-            )
+            settings = UserSettings(user_id=current_user.id)
             db.session.add(settings)
             db.session.commit()
         
