@@ -473,7 +473,6 @@ def migrate_courses_from_md():
                             
                             # If still no user, create a system user
                             if not system_user:
-                                from flask_bcrypt import bcrypt
                                 system_user = User(
                                     nim='SYSTEM',
                                     name='System User',
