@@ -237,14 +237,14 @@ class Course(db.Model):
     __tablename__ = 'courses'
     
     id = db.Column(db.Integer, primary_key=True)
-    course_code = db.Column(db.String(20), nullable=False)  # e.g., AR25-11001
+    course_code = db.Column(db.String(30), nullable=False)  # e.g., AR25-11001
     course_name = db.Column(db.String(200), nullable=False)  # e.g., Studio Dasar 1
-    class_type = db.Column(db.String(10), nullable=False)  # e.g., RA, RB, RC
-    class_id = db.Column(db.String(20), nullable=False, unique=True)  # e.g., 37053 (SIAKAD class ID)
-    semester = db.Column(db.String(10))  # e.g., 2024/2025-1
+    class_type = db.Column(db.String(100), nullable=False)  # e.g., RA,RB,RC,RD
+    class_id = db.Column(db.String(100), nullable=False, unique=True)  # e.g., 35634,35636,35638,35639
+    semester = db.Column(db.String(20))  # e.g., 2025/2026-1
     sks = db.Column(db.Integer, default=0)
-    faculty = db.Column(db.String(100))  # e.g., Fakultas Teknik
-    department = db.Column(db.String(100))  # e.g., Teknik Arsitektur
+    faculty = db.Column(db.String(150))  # e.g., Fakultas Teknik - Informatika
+    department = db.Column(db.String(150))  # e.g., 💻 INFORMATIKA (IF)
     is_active = db.Column(db.Boolean, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
