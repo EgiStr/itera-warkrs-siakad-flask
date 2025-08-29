@@ -10,6 +10,10 @@ import threading
 import time
 from datetime import datetime
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # Flask core imports
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -102,8 +106,8 @@ except ImportError as e:
             pass
             return False, {}, [], []
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app with static file configuration
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # Load configuration (with error handling)
 try:

@@ -9,6 +9,11 @@ class Config:
     """Base configuration class"""
     SECRET_KEY = os.environ.get('FLASK_SECRET_KEY') or 'war-krs-secret-key-change-in-production'
     
+    # Static files configuration
+    STATIC_FOLDER = 'static'
+    STATIC_URL_PATH = '/static'
+    STATIC_VERSION = '1.1'  # For cache busting
+    
     # Database configuration
     BASE_DIR = Path(__file__).parent
     database_url = os.environ.get('DATABASE_URL') or f'sqlite:///{BASE_DIR}/warkrs.db'
